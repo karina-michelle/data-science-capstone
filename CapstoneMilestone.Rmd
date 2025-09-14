@@ -1,0 +1,85 @@
+---
+title: "Capstone Milestone Report"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+```
+
+### Download Dataset
+``` {r download_dataset}
+data_url <- "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+filename <- "Coursera-SwiftKey.zip"
+if (!file.exists(filename)) {
+        download.file(data_url, destfile=filename, mode = "wb")
+}
+if (!dir.exists("final")){
+        unzip(filename)
+}
+```
+
+### Dataset Summary
+For each file, we will:
+- Read text document into memory
+- Convert string to lowercase
+- Split each line into array of words
+- Create a file summary data frame with file size, number of lines, average words per line, and average characters per line
+- Create a words summary table with a count of each word, only append the top 15 most frequent words to the overall words data frame
+
+``` {r data_summary, warning=FALSE}
+files <- c("blogs", "news", "twitter")
+summary_table <- data.frame()
+words_table <- data.frame()
+
+for (i in seq_along(files)){
+        datapath <- paste("./final/en_US/en_US.", files[i],".txt", sep="")
+        data <- readLines(datapath)
+        txt <- tolower(data)
+        words_per_line <- str_split(txt, "\\s+")
+
+        file_summary <- data.frame(
+                Dataset = files[i],
+                FileSize = file.info(datapath)$size / 1024^2,
+                NumLines = length(data),
+                AvgWordsPerLine = mean(sapply(words_per_line, length)),
+                AvgCharsPerLine = mean(nchar(data))
+        )
+        summary_table <- rbind(summary_table, file_summary)
+        
+        words_count <- as.data.frame(table(unlist(words_per_line)))
+        colnames(words_count) <- c("Word", "Count")
+        words_count$Dataset <- files[i]
+        words_table <- rbind(words_table, head(words_count[order(words_count$Count, decreasing = TRUE), ], 15))
+}
+```
+### Illustrate Data Summary 
+``` {r plot}
+df_long <- summary_table %>%
+  pivot_longer(cols = -Dataset, names_to = "Feature", values_to = "Value")
+
+ggplot(df_long, aes(x = Dataset, y = Value, fill=Dataset)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~Feature, scales="free_y") +
+  labs(x = NULL, y = NULL) +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "bottom"
+  )
+
+ggplot(words_table, aes(x = reorder(Word, -Count), y = Count, fill=Dataset)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~Dataset, scales="free_x") +
+  labs(x = NULL, y = NULL) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )
+```
+
+### Interesting Findings
+Most of the interesting findings come from plotting the distribution of words per file. We find that the frequency of words that hold less meaning (i.e., the, and, to, at) is highest across all files. We can consider removing these "stop words" prior to defining features as input to the predictive algorithm.
